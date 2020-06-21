@@ -28,7 +28,8 @@ class PatternMgr:
         self._templateCount = 0
         self._botName = u"Nameless"
         punctuation = r"""`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?"""
-        self._puncStripRE = re.compile("[" + re.escape(punctuation) + "]")
+        chinese_punctuation = r"""、“”；：，《。》？【】·！￥…（）—"""
+        self._puncStripRE = re.compile("[" + re.escape(punctuation+chinese_punctuation) + "]")
         self._whitespaceRE = re.compile(r"\s+", re.UNICODE)
 
     def numTemplates(self):
@@ -244,9 +245,10 @@ class PatternMgr:
         # extract the star words from the original, unmutilated input.
         if foundTheRightStar:
             #print( ' '.join(pattern.split()[start:end+1]) )
-            if starType == 'star': return ' '.join(pattern.split()[start:end+1])
-            elif starType == 'thatstar': return ' '.join(that.split()[start:end+1])
-            elif starType == 'topicstar': return ' '.join(topic.split()[start:end+1])
+            if starType == 'star': return self._combine_cn_eng_sentence(pattern.split()[start:end+1])
+            elif starType == 'thatstar': return self._combine_cn_eng_sentence(that.split()[start:end+1])
+            elif starType == 'topicstar': return self._combine_cn_eng_sentence(topic.split()[start:end+1])
+            
         else: return u""
 
     def _match(self, words, thatWords, topicWords, root):
@@ -330,4 +332,31 @@ class PatternMgr:
                     return (newPattern, template)
 
         # No matches were found.
-        return (None, None)         
+        return (None, None)    
+    
+    def _combine_cn_eng_sentence(self, word_list):
+        # combine two chinese words with '', two english words with ' ',
+        # combine one chinese word with one english word with ''. 
+        # e.g.
+        # >>> print(_combine_cn_eng_sentence(['hi', '你', '觉', '得', 'what', 'movie', '好', '看']))
+        # hi你觉得what movie好看
+        def is_chinese_word(word):
+            # only used for Unicode
+            # used for word list processed by _split_cn_eng_sentence(string) and string.split()
+            if len(word) != 1: 
+                return False # a word is not chinese if it has more than one letter
+            return u'\u4e00' <= word and word <= u'\u9fa5' #unicode range for chinese letters
+        res = ''
+        is_prev_word_chinese = True # set to true to avoid space at the beginning
+        for w in word_list:
+            is_chinese = is_chinese_word(w)
+            if is_chinese:
+                res += w
+            else:
+                if is_prev_word_chinese:
+                    res += w
+                else:
+                    res += ' '+w
+            is_prev_word_chinese = is_chinese
+        return res  
+

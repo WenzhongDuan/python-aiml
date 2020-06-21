@@ -316,6 +316,26 @@ class Kernel:
             s = self._sessions
         return copy.deepcopy(s)
 
+
+    def _split_cn_eng_sentence(self, sentence):
+        # split chinese-chinese, chinese-english, english-chinese letters with a space 
+        # for example: "一二" -> "一 二", "一a" -> "一 a", "a二" -> "a 二".
+        # continuous english letters and continuous numbers are seen as individual words
+        # special character "*" is seen as a word
+        # e.g. ：
+        # >>> self._split_cn_eng_sentence('*你*好* * *hel*lo')
+        # * 你 * 好 * * * hel * lo
+        # >>> self._split_cn_eng_sentence('*你*好* *12*345')
+        # * 你 * 好 * * 12 * 345
+        special_chars = r'\*'
+        regEx = re.compile(r'[^'+special_chars+r'\w]+') #incontinuous letters/numbers/special chars
+        chinese = re.compile(r'(['+special_chars+r'\u4e00-\u9fa5])') #chinese characters
+        sub_sentences = regEx.split(sentence)
+        res_list = []
+        for s in sub_sentences:
+            res_list += chinese.split(s) #use chinese chars as delimiter, but keep them while splitting
+        return ' '.join(r for r in res_list if r) # remove '' from res_list
+
     def learn(self, filename):
         """Load and learn the contents of the specified AIML file.
 
@@ -336,7 +356,13 @@ class Kernel:
                 sys.stderr.write(err)
                 continue
             # store the pattern/template pairs in the PatternMgr.
+            em_ext = os.path.splitext(filename)[1]
             for key, tem in handler.categories.items():
+                # add space between chinese letters for patterns in .aiml files
+                if key and key[0] and key[1] and key[2] and em_ext == '.aiml':
+                    key = (self._split_cn_eng_sentence(key[0]).upper(),
+                            key[1], key[2])
+                    
                 self._brain.add(key, tem)
             # Parsing was successful.
             if self._verboseMode:
@@ -405,6 +431,7 @@ class Kernel:
         """Private version of respond(), does the real work."""
         if len(input_) == 0:
             return u""
+        input_ = self._split_cn_eng_sentence(input_) # add space between chinese letters before matching 
 
         # guard against infinite recursion
         inputStack = self.getPredicate(self._inputStack, sessionID)
